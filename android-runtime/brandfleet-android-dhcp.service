@@ -1,0 +1,14 @@
+[Unit]
+Description=BrandFleet Android private DHCP and DNS
+After=brandfleet-android-network.service
+Requires=brandfleet-android-network.service
+Before=lxc.service
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/dnsmasq --keep-in-foreground --conf-file=/etc/brandfleet/android-dnsmasq.conf
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

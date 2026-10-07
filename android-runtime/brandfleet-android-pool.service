@@ -1,0 +1,17 @@
+[Unit]
+Description=BrandFleet owned Android app pool boot and graceful shutdown
+After=systemd-modules-load.service systemd-udev-settle.service apparmor.service lxc.service brandfleet-android-network.service brandfleet-android-dhcp.service
+Requires=apparmor.service brandfleet-android-network.service brandfleet-android-dhcp.service
+Wants=systemd-udev-settle.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/brandfleet/android-runtime/pool-lifecycle.py start
+ExecStop=/opt/brandfleet/android-runtime/pool-lifecycle.py stop
+TimeoutStartSec=45min
+TimeoutStopSec=15min
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target

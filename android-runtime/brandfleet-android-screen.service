@@ -1,0 +1,10 @@
+[Unit]
+Description=BrandFleet private Android screen and input gateway
+After=network.target
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/brandfleet/android-runtime/screen-gateway.py
+Restart=on-failure
+RestartSec=3
+[Install]
+WantedBy=multi-user.target

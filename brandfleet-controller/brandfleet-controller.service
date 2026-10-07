@@ -1,0 +1,16 @@
+[Unit]
+Description=BrandFleet private Android lifecycle controller
+After=network.target docker.service brandfleet-android-network.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/brandfleet/controller
+EnvironmentFile=/etc/brandfleet/controller.env
+ExecStart=/usr/bin/python3 /opt/brandfleet/controller/controller.py
+Restart=on-failure
+RestartSec=3
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

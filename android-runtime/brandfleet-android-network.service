@@ -1,0 +1,13 @@
+[Unit]
+Description=BrandFleet private Android LXC network
+After=network-online.target docker.service
+Wants=network-online.target
+Before=lxc.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/brandfleet/android-network.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

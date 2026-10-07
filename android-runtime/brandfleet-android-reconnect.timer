@@ -1,0 +1,8 @@
+[Unit]
+Description=Refresh private Android ADB connections
+[Timer]
+OnBootSec=90
+OnUnitActiveSec=30
+Unit=brandfleet-android-reconnect.service
+[Install]
+WantedBy=timers.target

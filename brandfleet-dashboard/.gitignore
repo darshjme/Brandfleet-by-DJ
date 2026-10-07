@@ -1,0 +1,5 @@
+.env
+*.log
+inventory.json
+state/
+node_modules/

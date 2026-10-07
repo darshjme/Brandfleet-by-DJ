@@ -1,0 +1,6 @@
+[Unit]
+Description=Reconnect private BrandFleet Android ADB devices
+After=brandfleet-android-dhcp.service
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/brandfleet/android-runtime/reconnect-android.py

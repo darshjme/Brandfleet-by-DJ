@@ -1,0 +1,31 @@
+{
+  "updatedAt": "2026-10-06T00:00:00Z",
+  "source": "static-public-example",
+  "mode": "read-only",
+  "notes": [
+    "Illustrative local preview. No live host or Android device is connected.",
+    "Resources and component health are unknown until independently measured."
+  ],
+  "capabilities": {"create": false, "profiles": []},
+  "infrastructure": [],
+  "brands": [
+    {
+      "id": "example-brand",
+      "name": "Example brand",
+      "domain": "app.example.com",
+      "url": "https://app.example.com",
+      "status": "unknown",
+      "phase": "Local example",
+      "description": "A generic brand card for exploring the dashboard.",
+      "resources": {},
+      "website": {"status": "unavailable", "runtime": "Native Debian userspace", "detail": "No website is connected in this preview."},
+      "android": {"status": "unavailable", "detail": "No Android device is connected in this preview."},
+      "automation": {"status": "unavailable", "detail": "No social publishing integration is connected."},
+      "social": [],
+      "backup": {"status": "unknown", "detail": "No backup is observed."},
+      "actions": [],
+      "jobs": []
+    }
+  ],
+  "services": []
+}

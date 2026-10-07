@@ -1,0 +1,24 @@
+[Unit]
+Description=BrandFleet fixed-mailbox Roundcube login grant broker
+After=network-online.target dovecot.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/brandfleet/webmail-sso/broker.py --config /root/brandfleet-private/webmail-sso.json --cert /etc/brandfleet-tls/production.crt --key /etc/brandfleet-tls/production.key
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=10
+MemoryMax=64M
+CPUQuota=25%
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+UMask=0077
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+StandardOutput=null
+StandardError=null
+
+[Install]
+WantedBy=multi-user.target

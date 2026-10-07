@@ -42,4 +42,4 @@ unset BRANDFLEET_PASSWORD_HASH
 
 ## Host integration is separate
 
-The supplied service files and runtime helpers are reference material. A real deployment needs operator-owned configuration, a qualified Linux kernel and Android image, private network paths, resource admission, persistent storage, backups and a tested recovery path. The public example inventory intentionally does not provide live endpoints or credentials.
+The supplied service files and runtime helpers are reference material. A real Coolify deployment needs operator-owned Debian/Docker configuration, application images, domain routes, private control paths, resource limits, persistent storage and tested recovery. The preserved Android experiment additionally requires a qualified kernel and Android image. The public example inventory intentionally does not provide live endpoints or credentials.

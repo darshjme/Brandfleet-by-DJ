@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1560" height="500" viewBox="0 0 1560 500" role="img" aria-labelledby="title desc">
   <title id="title">BrandFleet by DJ</title>
-  <desc id="desc">One control room for website operations, Android devices and shared services. Public reference architecture by Darshankumar Joshi.</desc>
+  <desc id="desc">A browser control room for Coolify website deployments and shared Debian mail and workspace services. By Darshankumar Joshi.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#101b2a"/><stop offset="1" stop-color="#132b32"/></linearGradient>
     <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#73e8cb"/><stop offset="1" stop-color="#91bdf6"/></linearGradient>
@@ -15,34 +15,34 @@
   <path d="M79 69h16v5H84v4h9v5h-9v6h-5Z" fill="#132935"/>
   <text x="124" y="84" class="small" fill="#87e6d0">YOUR BRANDS. ONE CONTROL ROOM.</text>
   <text x="68" y="192" fill="#f4fbfa" font-size="70" font-weight="700">BrandFleet <tspan fill="#86e2cc">by DJ</tspan></text>
-  <text x="70" y="246" class="body">Website operations. Android device control.</text>
+  <text x="70" y="246" class="body">Website deployments. Shared Debian services.</text>
   <text x="70" y="280" class="body">Shared mail and workspace. One browser.</text>
   <path d="M70 322h490" stroke="#56717e" stroke-opacity=".55"/>
   <text x="70" y="360" font-size="19" fill="#eff7fa">By Darshankumar Joshi</text>
-  <text x="70" y="397" font-size="15" fill="#97b0bf">Documented experiment · 15 accepted devices · Operator configuration required</text>
+  <text x="70" y="397" font-size="15" fill="#97b0bf">Coolify on Debian · Per-app workloads · Persistent data</text>
   <g filter="url(#shadow)">
     <rect x="858" y="92" width="585" height="306" rx="20" fill="#1b303d" stroke="#55747c" stroke-opacity=".65"/>
     <rect x="858" y="92" width="585" height="48" rx="20" fill="#263e4a"/>
     <path d="M858 118h585v22H858Z" fill="#263e4a"/>
     <circle cx="887" cy="116" r="5" fill="#ffb099"/><circle cx="905" cy="116" r="5" fill="#edcc88"/><circle cx="923" cy="116" r="5" fill="#80d9bd"/>
-    <text x="954" y="122" class="label">BRANDFLEET / REFERENCE CONTROL PLANE</text>
+    <text x="954" y="122" class="label">BRANDFLEET / DEPLOYMENT CONTROL ROOM</text>
     <rect x="885" y="168" width="260" height="197" rx="14" fill="#132730" stroke="#4d6a73"/>
     <circle cx="914" cy="199" r="5" fill="#83dfc5"/>
     <text x="930" y="205" class="card-title">A brand runtime</text>
     <rect x="906" y="231" width="218" height="51" rx="9" fill="#24433f"/>
     <rect x="921" y="245" width="25" height="22" rx="3" fill="none" stroke="#89e5cb" stroke-width="2"/>
     <path d="M921 251h25" stroke="#89e5cb" stroke-width="2"/>
-    <text x="960" y="262" font-size="17" fill="#deefeb">Website processes</text>
+    <text x="960" y="262" font-size="17" fill="#deefeb">Docker / Compose</text>
     <rect x="906" y="297" width="218" height="46" rx="9" fill="#29394c"/>
     <rect x="926" y="307" width="14" height="24" rx="3" fill="none" stroke="#9cbbef" stroke-width="2"/>
-    <text x="959" y="325" font-size="17" fill="#deebfb">Android + social apps</text>
+    <text x="959" y="325" font-size="17" fill="#deebfb">Persistent app data</text>
     <path d="M1145 265h29" stroke="#83dfc5" stroke-width="2"/>
     <rect x="1174" y="168" width="242" height="89" rx="14" fill="#243342" stroke="#506b7b"/>
-    <text x="1195" y="201" font-size="18" fill="#edf6ff" font-weight="700">Private control</text>
-    <text x="1195" y="231" font-size="15" fill="#a9c1d5">Authenticated · Bounded</text>
+    <text x="1195" y="201" font-size="18" fill="#edf6ff" font-weight="700">Coolify deployments</text>
+    <text x="1195" y="231" font-size="15" fill="#a9c1d5">Private control · Live inventory</text>
     <rect x="1174" y="278" width="242" height="87" rx="14" fill="#263e40" stroke="#506f70"/>
     <text x="1195" y="311" font-size="18" fill="#edf6f4" font-weight="700">Shared Debian services</text>
     <text x="1195" y="340" font-size="15" fill="#b5cec9">Mail · Files · Chat · Calendar</text>
   </g>
-  <text x="1440" y="457" text-anchor="end" font-size="13" letter-spacing="1.5" fill="#85a7b1">REFERENCE SNAPSHOT / OCTOBER 2026</text>
+  <text x="1440" y="457" text-anchor="end" font-size="13" letter-spacing="1.5" fill="#85a7b1">DEPLOYMENT ARCHITECTURE / OCTOBER 2026</text>
 </svg>

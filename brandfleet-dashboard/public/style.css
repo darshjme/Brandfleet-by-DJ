@@ -20,3 +20,10 @@
 @media (max-width: 600px) { .package-evidence-row { grid-template-columns: minmax(0,1fr) auto; gap: 10px; } .package-evidence-row > div:nth-child(2) { grid-column: 1; grid-row: 2; } .package-evidence-row > .badge { grid-column: 2; grid-row: 1 / 3; } }
 
 .brand-social-launch{padding:15px 18px;border-top:1px solid var(--line);background:#f5f9f3}.brand-social-launch>strong{display:block;font-size:10px;color:#577464;margin-bottom:10px}.social-launch-buttons{display:flex;flex-wrap:wrap;gap:7px}.social-launch-buttons .button{font-size:10px;min-height:31px;padding:7px 9px}.brand-social-launch .social-launch-buttons .primary{flex-basis:100%;text-align:center;margin-top:2px}.direct-social-launch{margin-top:0;padding-top:0;border-top:0;margin-bottom:24px}.direct-social-launch .social-launch-buttons .button{font-size:12px;padding:10px 13px}.direct-social-launch h3{font-size:15px}.direct-social-launch p{line-height:1.7}
+
+.topbar-right .button { white-space:nowrap; }
+@media(max-width:700px) {
+  .topbar .breadcrumb,.topbar .mode-badge { display:none; }
+  .topbar-right { margin-left:auto; gap:8px; }
+  .topbar-right .button { font-size:11px; padding:8px 10px; }
+}

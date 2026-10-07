@@ -1,76 +1,58 @@
-# The BrandFleet reference architecture
+# Coolify on Debian: the current architecture
 
-This document records the Android hosting experiment accepted on **6 October 2026**. It explains the design preserved by this repository. The owner subsequently requested a return to Coolify on Debian; that migration is planned and is not established by this source release.
+On **7 October 2026**, all 14 production brands returned to Coolify-managed Docker workloads in the existing Debian VM with current application data. After the Android pool stopped, trusted-TLS checks passed for all 37 website domains/aliases at the origin and 43 public URLs, including six shared pages. Mail, workspace and common backends remain in a shared Debian LXC within that VM. The Android recovery VM is stopped, with autostart disabled and recovery disks retained.
 
-![Reference architecture](assets/architecture.svg)
+![Coolify and shared Debian services architecture](assets/architecture.svg)
 
-## Traffic and control
+## Domain routing and deployment
 
-Public website traffic follows domain DNS to a TLS ingress, then to a brand's native website processes. Many domains can share the ingress address because the reverse proxy selects a route by hostname. A shared address does not mean that all applications run in one container.
+Public website traffic reaches Traefik over HTTPS. Traefik chooses an application route by hostname, so multiple domains and aliases can share one ingress address. DNS points traffic to the ingress; Coolify and the reverse proxy determine which application serves it.
 
-An authenticated administrator uses the Node dashboard. The dashboard passes fixed lifecycle requests to a private Python controller, which maintains inventory and job state. Android screenshots and input go through a separate private gateway. ADB, bearer credentials and internal control endpoints stay behind the gateway rather than becoming public browser endpoints.
+Small sites run as individual Docker application containers. Stateful applications run as Compose services with the web application, database and other dependencies represented separately. Coolify manages the deployment resource; application code, runtime configuration, writable storage and scheduled jobs still need deliberate ownership.
 
-Each brand's Android LXC contains two kinds of persistent state: Android userdata and the website's native Linux userspace. The website processes run inside a Debian userspace chroot within that container. A chroot supplies a Linux filesystem and libraries; it does not supply another kernel or independent container boundary. This coupling makes the brand easy to address as one unit, but stopping the Android LXC also stops its website.
+Container resource limits constrain a service's usage. They do not supply an independent kernel, eliminate dependencies on ingress or prevent all failures elsewhere in the VM. A stopped or unhealthy application should affect its own route; the shared Debian VM, storage and physical Proxmox host remain common dependencies.
 
-## Isolation has several layers
+## What the dashboard controls
 
-| Layer | What it isolates | Remaining common dependency |
-| --- | --- | --- |
-| Per-brand LXC | Userspace, persistent paths, network namespace and assigned resource limits | Android pool kernel and physical capacity |
-| Android pool VM | Android kernel and pool services from the ingress/shared-services VM | Physical Proxmox host |
-| Shared Debian LXC | Mail, workspace and shared backends from per-brand devices | Its containing host/VM and storage |
-| TLS ingress | Public routing from private device-control endpoints | Ingress availability and route configuration |
+The authenticated Node dashboard presents brands, website status, container resources, shared-service links and the relevant Coolify deployment page. Its private Python controller maps each brand to the current managed resource and actual containers. Stopped historical deployments do not replace a healthy current instance in inventory.
 
-The reference did not run a Docker daemon inside the Android devices or shared Debian LXC. The retained ingress platform still supplied Traefik. LXC isolation and a VM boundary do not turn Android social applications into ordinary lightweight website workers.
+Coolify owns deployment changes. BrandFleet provides their overview and direct management navigation. A dashboard session does not grant unrestricted access to every mailbox or shared workspace. These applications retain their own authentication and access controls.
 
-## Resource admission
-
-The recorded pool VM had **42 GiB RAM**. Fifteen live devices had assigned limits totalling **33,280 MiB**, against a measured allocation budget of **38,037 MiB**. These numbers describe one host at one acceptance point, not minimum specifications or a throughput benchmark.
-
-The allocation budget was the smaller of 38 GiB and measured guest memory minus a 4 GiB OS reserve. Creation also checked actual available memory: a default 2 GiB device needed 5 GiB available, preserving a separate 3 GiB admission reserve. Thirty-two prepared binder slots defined a slot ceiling; they did not establish that 32 devices could fit. Admission must remeasure the host rather than extrapolating from the slot count.
-
-Android services, rendering, social apps and per-brand databases compete for real CPU and memory. Resource caps can contain one brand's usage, but cannot remove Android's base cost. That cost and unresolved app compatibility motivated the requested return to conventional website deployment.
-
-## Browser interaction and responsiveness
-
-The device studio offers fixed launch controls for Instagram, WhatsApp, LinkedIn, X and Figma Mirror, plus touch, swipe, text entry, Home, Back and Recents. It displays PNG snapshots rather than an accepted continuous video stream.
-
-The viewer avoids decoding identical PNGs and reduces capture demand after repeated unchanged frames. Input, app launch or a visible change resets the interval. Hidden or paused viewers stop polling, and control ownership is bounded per device. A gateway-wide capture limit prevents a browser tab from creating unbounded fresh work. These controls reduce needless capture/decode work; they do not prove GPU acceleration, smoother video or lower production CPU usage.
-
-The reference optimization halved Android window and transition animation scales. It preserved website process identities and device resource limits. Production acceptance included the dashboard and controller suites, real browser Instagram launch and Home input, and all fifteen website origins. The source release is tested separately after sanitization.
+Android lifecycle and creation controls remain blocked. The completed return uses a retained inventory snapshot rather than repeatedly contacting the stopped recovery VM. The historical screen/input gateway and provisioning source remain available for an independently qualified Android lab.
 
 ## Shared services
 
-A separate Debian LXC hosted Nextcloud Files, Talk, Calendar, Contacts and Deck; native Postfix and Dovecot with filtering, antivirus, DKIM, Sieve and webmail; and shared backends including TURN. Its recorded limit was 4 GiB and two CPUs.
+| Component | Responsibility |
+| --- | --- |
+| Nextcloud | Files, Talk, Calendar, Contacts and Deck |
+| Postfix / Dovecot | SMTP transport, mailboxes and IMAP access |
+| Filtering and DKIM | Spam/virus filtering, signing, quotas and mailbox rules |
+| Webmail and login broker | Webmail plus a short-lived, single-use grant for a configured mailbox |
+| PocketBase | Shared application backend |
+| FreeResend | Shared email-sending application service |
+| TURN | Relay service for communication clients |
+| DNS management | Optional management interface; no separate Android device is required |
 
-A shared workspace instance needs explicit identity, group and access-control configuration for each organization. It should not be described as independently isolated tenant systems merely because it serves several domains. Likewise, mail domains need explicit administration plus verified MX, SPF, DKIM, DMARC and reverse DNS. Domains already using an external workspace provider can keep their existing mail routing.
+These services run natively in the shared Debian LXC. Its bridge, DHCP and required service endpoints remain active even when the Android pool is stopped. Applications that depend on PocketBase, mail or FreeResend use the current shared-service endpoints rather than old Android compatibility aliases.
 
-The fixed-mailbox webmail broker is intentionally narrow. It issues a short-lived, single-use grant for a configured mailbox and relies on normal TLS IMAP authentication. It is not a general Google Workspace login system. Operators must configure its principal, mailbox and private issuer material for their own environment.
+Serving multiple domains does not automatically create isolated organizations. Nextcloud groups, memberships and sharing permissions define collaboration boundaries. Mail domains and mailbox grants also require explicit administration. Two reference-deployment domains already use Google Workspace; their Google mail routing is retained independently of website hosting.
 
-## Accepted limits
+## Persistence and recovery
 
-The production snapshot used Android 14/API 34 with a May 2024 security patch. An Android 16 canary failed bootstrap APEX mounting under the tested isolation and was stopped. No production OS upgrade was established.
+The return carries forward current application code, private runtime configuration and current writable data. Old retained Docker data is not presumed current. Database writers are stopped or otherwise quiesced before consistent transfer; routes change after candidate acceptance. Old Android writers stay stopped to avoid two active copies.
 
-Instagram and WhatsApp reached their welcome screens. LinkedIn foreground launch worked, but usable sign-in remained unresolved; WhatsApp displayed a custom-ROM warning. No connected-account publishing was accepted. A home exit node was advertised, while administrator approval and app-specific Android egress acceptance remained pending. Routing never establishes that a platform cannot detect automation.
+Different data needs different checks: file parity for static assets and configuration, database counts and extensions, integrity checks for SQLite, and restart persistence for managed services. Job schedules must target the accepted containers and endpoints. A copy of source on GitHub does not preserve mailboxes, database writes or social sessions.
 
-A source checkout cannot recreate logged-in Android devices, original mailboxes or application databases. Those require separate authorized backups and restore verification. Mail protocol and TURN relay tests also have narrower scope than outside mail deliverability or an actual browser-to-browser call.
+Current local backups, verified offhost backups where configured, original data directories and Android recovery disks serve separate purposes. The restored trading website has a successful local backup; its offhost target remains unconfigured. Migration cold restores were verified, but an isolated restore drill of the new nightly logical archives remains unrun. Archive validation is not an isolated restore test. Some large historical datasets were checked by metadata, counts and headers rather than a full-file checksum scan; the private operational evidence records those bounds.
 
-## Planned Coolify destination
+## Resource policy
 
-The requested destination separates the responsibilities:
+Measure available memory and workload behavior on the actual host. Per-container limits, idle observations and VM RAM allocations describe different things: reducing a container limit does not prove that amount of physical RAM has been reclaimed. Stopping the Android recovery VM is the relevant boundary for releasing its guest allocation to Proxmox.
 
-```mermaid
-flowchart LR
-  Domains[Website domains] --> TLS[HTTPS ingress]
-  TLS --> Coolify[Coolify on Debian]
-  Coolify --> Apps[Per-application Docker workloads]
-  Apps --> Data[Persistent volumes and data backups]
-  Admin[Administrator] --> GUI[Management dashboards]
-  GUI --> Coolify
-  GUI --> Optional[Optional Android devices]
-  TLS --> Shared[Shared workspace and mail services]
-```
+On 7 October 2026, host available memory measured **4.62 GiB at 07:21:59 UTC** and **46.13 GiB at 08:23:49 UTC**, after the recovery VM was confirmed stopped. The **41.51 GiB increase over that interval** includes any other workload variation; it is a dated observation, not a peak-load benchmark or a promise of future free memory.
 
-Websites would return to conventional Coolify-managed workloads on Debian. Android devices would become optional social/testing devices instead of website uptime dependencies. Mail and workspace data require their own preservation and cutover checks; changing the website runtime does not itself move those services.
+The return preserves Kali's configuration and runtime. Website serving, shared-service health, database continuity, route acceptance and scheduled maintenance are checked before ending the migration. Trading automation remains paused independently of the restored trading website; restoring a UI does not authorize automated trades.
 
-Choosing a Debian VM or a Debian LXC for Coolify requires checking Docker nesting, kernel features, storage, capacity and restore behavior on the actual host. This repository documents the destination without claiming those production checks or the migration have happened.
+## Historical Android model
+
+The [Android experiment](android-experiment.md) coupled native Debian website processes with per-brand Android LXC devices in an isolated pool VM. It remains source and recovery reference. Android app installation never established connected-account posting, usable sign-in for every app, home-IP egress or undetectable automation. The current website architecture removes that runtime from website uptime.

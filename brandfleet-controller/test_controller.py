@@ -19,6 +19,7 @@ class ControllerTest(unittest.TestCase):
         spec = importlib.util.spec_from_file_location('controller', os.path.join(os.path.dirname(__file__), 'controller.py'))
         cls.module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(cls.module)
+        cls.module.ROUTE_LOCK = __import__('pathlib').Path(cls.temp.name)/'route.lock'
         cls.server = ThreadingHTTPServer(('127.0.0.1', 0), cls.module.Handler)
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()
 
@@ -42,6 +43,66 @@ class ControllerTest(unittest.TestCase):
     def test_authentication_required(self):
         self.assertEqual(self.request('/jobs', auth=False)[0], 401)
 
+    def test_coolify_return_blocks_android_creation_and_social_launch(self):
+        m=self.module
+        with patch.object(m,'coolify_return_state',return_value={'active':True}):
+            self.assertFalse(m.ready())
+            self.assertEqual(self.request('/brands',{'profile':'android-static'})[0],409)
+            with patch.object(m,'urlopen') as launch:
+                with self.assertRaises(RuntimeError):m.launch_social('bf-brand-one','instagram')
+                launch.assert_not_called()
+
+    def test_returned_sites_are_excluded_from_android_route_reconciliation(self):
+        m=self.module;from pathlib import Path
+        apps=[{'id':'bf-returned','domain':'returned.example.com','ip':'10.77.0.12','migrated':True,'returnedToCoolify':True}, {'id':'bf-pending','domain':'pending.example.com','ip':'10.77.0.13','migrated':True,'webPort':3000,'endpoints':[{'port':7700,'pathPrefixes':['/api','/health']}]}]
+        route=Path(self.temp.name)/'return-routes.json'
+        with patch.object(m,'android_inventory',return_value=apps),patch.object(m,'ROUTES',route):m.reconcile_routes()
+        config=json.loads(route.read_text())['http']
+        self.assertNotIn('bf-returned',config['routers']);self.assertNotIn('bf-returned',config['services'])
+        self.assertEqual(config['services']['bf-pending-endpoint-0']['loadBalancer']['servers'],[{'url':'http://10.77.0.13:7700'}])
+
+    def test_completed_return_does_not_emit_empty_traefik_maps(self):
+        m=self.module
+        route=m.Path(self.temp.name)/'return-empty-routes.json'
+        apps=[{'id':'bf-returned','domain':'returned.example.com','migrated':True,'returnedToCoolify':True}]
+        with patch.object(m,'android_inventory',return_value=apps),patch.object(m,'ROUTES',route):m.reconcile_routes()
+        http=json.loads(route.read_text())['http']
+        self.assertNotIn('routers',http)
+        self.assertNotIn('services',http)
+        self.assertIn('brandfleet-redirect',http['middlewares'])
+
+    def test_completed_return_uses_retained_metadata_and_live_docker_without_pool(self):
+        m=self.module
+        android=[{'id':'bf-returned','domain':'returned.example.com','migrated':True,'returnedToCoolify':True,'state':'STOPPED'}]
+        state={'active':True,'phase':'complete','retainedAndroid':android}
+        raw=[{'Id':str(i)*64,'Name':'/container-'+str(i),'State':{'Running':running},'Config':{'Image':'current-image','Labels':{'traefik.http.routers.site.rule':'Host(`returned.example.com`)'}}}for i,running in [(1,True),(2,False)]]
+        def command(argv,timeout=25):return ' '.join(d['Id']for d in raw)if argv[:2]==['docker','ps']else json.dumps(raw)
+        with patch.object(m,'coolify_return_state',return_value=state),patch.object(m,'command',side_effect=command) as cmd,patch.object(m,'shared_services_inventory',return_value=([],{}, {'id':'shared-native'})),patch.object(m,'social_evidence_inventory') as social,patch.object(m,'pool_status') as pool,patch.object(m.Path,'read_text',return_value='MemTotal: 1024 kB\nMemAvailable: 512 kB\n'):
+            self.assertEqual(m.android_inventory(),android)
+            result=m.inventory()
+            self.assertEqual([b['description']for b in result['brands']],['container-1'])
+            self.assertEqual(result['brands'][0]['phase'],'coolify-production')
+            self.assertFalse(result['capabilities']['create']);self.assertEqual(result['brands'][0]['actions'],[])
+            self.assertEqual(result['mode'],'coolify-debian-return')
+            social.assert_not_called();pool.assert_not_called()
+            self.assertTrue(all(c.args[0][0]=='docker'for c in cmd.call_args_list))
+
+    def test_accepted_shutdown_transition_uses_retained_inventory_without_pool(self):
+        m=self.module
+        app={'id':'bf-managed','domain':'managed.example.com','returnedToCoolify':True,'state':'STOPPED','coolifyDeployment':{'resourceUuid':'managed-uuid','primaryService':'web'}}
+        state={'active':True,'phase':'accepted-awaiting-pool-shutdown','retainedAndroid':[app]}
+        raw=[{'Id':'a'*64,'Name':'/web-managed-uuid','State':{'Running':True,'Pid':0},'Config':{'Image':'current-image','Labels':{'com.docker.compose.project':'managed-uuid','com.docker.compose.service':'web'}},'HostConfig':{}}]
+        def command(argv,timeout=25):return raw[0]['Id']if argv[:2]==['docker','ps']else json.dumps(raw)
+        with patch.object(m,'coolify_return_state',return_value=state),patch.object(m,'command',side_effect=command)as cmd,patch.object(m,'shared_services_inventory',return_value=([],{},{})),patch.object(m,'pool_status')as pool,patch.object(m.Path,'read_text',return_value='MemTotal: 1024 kB\nMemAvailable: 512 kB\n'):
+            result=m.inventory()
+        self.assertEqual(len(result['brands']),1)
+        self.assertEqual(result['brands'][0]['status'],'running')
+        self.assertFalse(result['capabilities']['create'])
+        self.assertIn('shutdown is pending',result['notes'][0])
+        self.assertNotIn('pool is stopped',result['notes'][0])
+        pool.assert_not_called()
+        self.assertTrue(all(c.args[0][0]=='docker'for c in cmd.call_args_list))
+
     def test_mail_admin_uses_fixed_helper_stdin_and_strips_private_fields(self):
         self.assertEqual(self.request('/mail-admin', {'action':'list'}, auth=False)[0],401)
         self.assertEqual(self.request('/mail-admin', {'action':'fixture_cleanup'})[0],400)
@@ -53,6 +114,35 @@ class ControllerTest(unittest.TestCase):
             self.assertEqual(run.call_args.args[0],['/usr/bin/python3','/opt/brandfleet/services/native-mail-admin.py'])
             self.assertEqual(json.loads(run.call_args.kwargs['input']),{'action':'list'})
             self.assertNotIn('shell',run.call_args.kwargs)
+
+    def test_coolify_mapping_uses_current_roles_without_historical_duplicates(self):
+        m=self.module
+        app={'id':'bf-current','domain':'current.example.com','coolifyDeployment':{'resourceUuid':'site-uuid','containers':['web-old','db-site-uuid'],'primaryContainer':'web-old','primaryService':'web','consoleUrl':'https://console.example.com/service/site-uuid'}}
+        def container(name,role,running):
+            return {'Id':name+'-id','Name':'/'+name,'Created':'2026-10-07','State':{'Running':running,'Pid':0},'Config':{'Image':'retained-image','Labels':{'com.docker.compose.project':'site-uuid','com.docker.compose.service':role}},'HostConfig':{'Memory':128*1024*1024,'NanoCpus':500000000}}
+        raw=[container('web-old','web',False),container('web-new','web',True),container('db-site-uuid','db',True)]
+        result=m.coolify_brand(app,raw)
+        self.assertEqual(result['status'],'running')
+        self.assertEqual(result['website']['containerId'],'web-new-id')
+        self.assertEqual(result['resources']['memoryLimitBytes'],256*1024*1024)
+        self.assertEqual(result['resources']['cpuCores'],1)
+        self.assertEqual(result['automation']['url'],app['coolifyDeployment']['consoleUrl'])
+        raw[2]['State']['Running']=False
+        self.assertEqual(m.coolify_brand(app,raw)['status'],'degraded')
+
+    def test_completed_return_maps_compose_site_without_public_docker_labels(self):
+        m=self.module
+        app={'id':'bf-managed','domain':'managed.example.com','returnedToCoolify':True,'coolifyDeployment':{'resourceUuid':'managed-uuid','primaryService':'web'}}
+        state={'active':True,'phase':'complete','retainedAndroid':[app]}
+        raw=[{'Id':'a'*64,'Name':'/web-managed-uuid','State':{'Running':True,'Pid':0},'Config':{'Image':'current-image','Labels':{'com.docker.compose.project':'managed-uuid','com.docker.compose.service':'web'}},'HostConfig':{}}]
+        def command(argv,timeout=25):return raw[0]['Id']if argv[:2]==['docker','ps']else json.dumps(raw)
+        with patch.object(m,'coolify_return_state',return_value=state),patch.object(m,'command',side_effect=command),patch.object(m,'shared_services_inventory',return_value=([],{},{})),patch.object(m,'pool_status')as pool,patch.object(m.Path,'read_text',return_value='MemTotal: 1024 kB\nMemAvailable: 512 kB\n'):
+            result=m.inventory()
+        self.assertEqual(len(result['brands']),1)
+        self.assertEqual(result['brands'][0]['id'],'bf-managed')
+        self.assertEqual(result['brands'][0]['status'],'running')
+        self.assertEqual(result['brands'][0]['phase'],'coolify-production')
+        pool.assert_not_called()
 
     def test_unvalidated_profile_rejects_creation(self):
         with patch.object(self.module, 'ready', return_value=False):

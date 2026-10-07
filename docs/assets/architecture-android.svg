@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1480" height="1080" viewBox="0 0 1480 1080" role="img" aria-labelledby="title desc">
+  <title id="title">BrandFleet Android hosting reference architecture</title>
+  <desc id="desc">Website domains reach native website processes inside per-brand Android LXC devices through Traefik HTTPS ingress. An authenticated dashboard controls private lifecycle and screen gateways. Separate Debian services supply mail and workspace. The devices share the isolated pool VM kernel and the physical Proxmox host.</desc>
+  <defs>
+    <marker id="teal-arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="m0 0 10 5-10 5Z" fill="#64dcc2"/></marker>
+    <marker id="gold-arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="m0 0 10 5-10 5Z" fill="#f4c485"/></marker>
+    <style>text{font-family:Arial,Helvetica,sans-serif}.title{fill:#f0f7fb;font-size:22px;font-weight:700}.body{fill:#adc4d1;font-size:17px}.small{fill:#91aebc;font-size:15px}.control{fill:none;stroke:#64dcc2;stroke-width:3;marker-end:url(#teal-arrow)}.traffic{fill:none;stroke:#f4c485;stroke-width:3;marker-end:url(#gold-arrow)}</style>
+  </defs>
+  <rect width="1480" height="1080" rx="20" fill="#101c29"/>
+  <text x="60" y="64" fill="#f0f7fb" font-size="38" font-weight="700">BrandFleet / architecture</text>
+  <text x="60" y="103" class="body">Recorded Android hosting experiment · accepted 6 October 2026</text>
+  <path d="M60 132h1360" stroke="#36515f"/>
+  <rect x="70" y="198" width="230" height="122" rx="15" fill="#27363f" stroke="#68808b"/>
+  <text x="92" y="237" class="title">Website domains</text>
+  <text x="92" y="270" class="body">Visitors + DNS</text>
+  <text x="92" y="297" class="small">One ingress address</text>
+  <rect x="390" y="198" width="270" height="122" rx="15" fill="#3b3638" stroke="#b18c64"/>
+  <text x="414" y="237" class="title">Traefik HTTPS ingress</text>
+  <text x="414" y="270" class="body">Hostname-based routing</text>
+  <text x="414" y="297" class="small">TLS at the public boundary</text>
+  <path d="M300 259h90" class="traffic"/>
+  <text x="309" y="242" class="small">HTTPS</text>
+  <rect x="750" y="172" width="660" height="350" rx="22" fill="#142731" stroke="#6dc8b7" stroke-width="2" stroke-dasharray="8 6"/>
+  <text x="780" y="212" class="title">Isolated Android pool VM on Proxmox</text>
+  <text x="780" y="241" class="small">42 GiB recorded RAM · measured admission · shared VM kernel</text>
+  <rect x="780" y="270" width="600" height="218" rx="15" fill="#1f3940" stroke="#66a99e"/>
+  <text x="807" y="310" class="title">Per-brand Android LXC</text>
+  <text x="807" y="339" class="small">Persistent state · per-device resource caps</text>
+  <rect x="802" y="362" width="260" height="94" rx="11" fill="#25453f" stroke="#5da18d"/>
+  <text x="820" y="397" font-size="19" font-weight="700" fill="#edfbf6">Native website processes</text>
+  <text x="820" y="429" class="small">Debian userspace chroot + data</text>
+  <rect x="1092" y="362" width="260" height="94" rx="11" fill="#2d3c52" stroke="#7490bb"/>
+  <text x="1110" y="397" font-size="19" font-weight="700" fill="#edf5ff">Android + social apps</text>
+  <text x="1110" y="429" class="small">Separate userdata per brand</text>
+  <path d="M660 259h56v150h86" class="traffic"/>
+  <text x="669" y="392" class="small">Route</text>
+  <rect x="70" y="410" width="230" height="90" rx="15" fill="#203b3e" stroke="#5b9b95"/>
+  <text x="93" y="448" class="title">Administrator</text>
+  <text x="93" y="477" class="body">Browser over HTTPS</text>
+  <rect x="70" y="557" width="230" height="100" rx="15" fill="#203b3e" stroke="#5b9b95"/>
+  <text x="93" y="595" class="title">Node dashboard</text>
+  <text x="93" y="625" class="body">Sessions + CSRF</text>
+  <path d="M185 500v57" class="control"/>
+  <rect x="70" y="747" width="230" height="111" rx="15" fill="#203b3e" stroke="#5b9b95"/>
+  <text x="93" y="785" class="title">Python controller</text>
+  <text x="93" y="815" class="body">Private fixed actions</text>
+  <text x="93" y="840" class="small">Inventory + lifecycle jobs</text>
+  <path d="M185 657v90" class="control"/>
+  <text x="198" y="707" class="small">Authenticated API</text>
+  <rect x="945" y="590" width="375" height="112" rx="15" fill="#203b3e" stroke="#5b9b95"/>
+  <text x="969" y="629" class="title">Private screen / input gateway</text>
+  <text x="969" y="658" class="body">Bounded PNG captures + private ADB</text>
+  <text x="969" y="684" class="small">Touch · swipe · keys · fixed app launches</text>
+  <path d="M300 607h645" class="control"/>
+  <text x="518" y="590" class="small">Authenticated snapshot and input requests</text>
+  <path d="M1200 590v-68" class="control"/>
+  <path d="M300 802h25v138h1110V350h-25" class="control"/>
+  <text x="1000" y="928" class="small">Lifecycle + resource admission</text>
+  <rect x="390" y="674" width="468" height="240" rx="19" fill="#273646" stroke="#7d95b1"/>
+  <text x="416" y="716" class="title">Separate shared Debian LXC</text>
+  <text x="416" y="747" class="small">Recorded 4 GiB / 2 CPU</text>
+  <text x="416" y="790" class="body">Nextcloud: files, chat, calendar, contacts</text>
+  <text x="416" y="825" class="body">Postfix + Dovecot + filtering + webmail</text>
+  <text x="416" y="860" class="body">Shared backends + TURN + backups</text>
+  <text x="416" y="889" class="small">Explicit domain and access-control configuration</text>
+  <path d="M525 320v238h-170v179h35" class="traffic"/>
+  <text x="538" y="414" class="small">Shared HTTPS services</text>
+  <path d="M60 961h1360" stroke="#36515f"/>
+  <circle cx="77" cy="997" r="5" fill="#f4c485"/><text x="92" y="1003" class="small">Public website / shared-service traffic</text>
+  <circle cx="535" cy="997" r="5" fill="#64dcc2"/><text x="550" y="1003" class="small">Private management and device control</text>
+  <text x="60" y="1047" class="small">Physical Proxmox host remains a common dependency. Return of websites to Coolify on Debian is planned.</text>
+</svg>

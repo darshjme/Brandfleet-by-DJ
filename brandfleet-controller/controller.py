@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Private localhost control plane. Legacy production services remain read-only."""
-import os,json,re,subprocess,threading,time,uuid,sqlite3,hmac,logging
+import os,json,re,subprocess,threading,time,uuid,sqlite3,hmac,logging,fcntl
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from datetime import datetime,timezone
@@ -11,9 +11,17 @@ TOKEN=os.environ['BRANDFLEET_CONTROLLER_TOKEN'];DB=ROOT/'jobs.sqlite';LOCK=threa
 RUNTIME=Path('/opt/brandfleet/android/brandfleet-android.py')
 READY=Path('/etc/brandfleet/runtime-ready.json')
 ROUTES=Path('/data/coolify/proxy/dynamic/brandfleet-apps.yaml')
+RETURN_STATE=ROOT/'coolify-return.json'
+ROUTE_LOCK=Path('/var/lock/brandfleet-coolify-return-route.lock')
 DOMAIN_RE=re.compile(r'^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$')
 ID_RE=re.compile(r'bf-[a-z0-9][a-z0-9-]{0,40}')
+def coolify_return_state():
+ try:
+  value=json.loads(RETURN_STATE.read_text())
+  return value if isinstance(value,dict) else {}
+ except (OSError,ValueError):return {}
 def ready():
+ if coolify_return_state().get('active') is True:return False
  try:return json.loads(READY.read_text()).get('validated') is True
  except (OSError,ValueError):return False
 def now():return datetime.now(timezone.utc).isoformat()
@@ -55,6 +63,9 @@ def newjob(rid,bid,act,argv):
  threading.Thread(target=run,daemon=True).start()
  return next(j for j in jobs() if j['id']==jid)
 def android_inventory(allow_cached=False,required=False):
+ returned=coolify_return_state()
+ if returned.get('phase') in ('accepted-awaiting-pool-shutdown','complete') and isinstance(returned.get('retainedAndroid'),list):
+  return returned['retainedAndroid']
  if not RUNTIME.exists():return []
  try:
   raw=json.loads(command(['/usr/bin/python3',str(RUNTIME),'status','--json'],timeout=5))
@@ -134,7 +145,7 @@ def pool_status():
  if not isinstance(result,dict) or not result.get('memoryAvailableBytes'):raise ValueError('Android pool unavailable')
  return result
 def check_capacity():
- apps=[a for a in android_inventory(required=True) if a.get('retired') is not True];host=pool_status()
+ apps=[a for a in android_inventory(required=True) if a.get('retired') is not True and a.get('returnedToCoolify') is not True];host=pool_status()
  assigned=sum(int(a.get('memoryMiB',4096)) for a in apps)
  budget=int(host.get('assignedBudgetMiB',24576))
  if len(apps)>=int(host.get('maxInstances',12)) or assigned+2048>budget or int(host['memoryAvailableBytes'])<5*1024**3:
@@ -149,8 +160,13 @@ def domain_in_use(domain):
    except (OSError,UnicodeError):pass
  return False
 def reconcile_routes():
+ ROUTE_LOCK.parent.mkdir(parents=True,exist_ok=True)
+ with ROUTE_LOCK.open('a') as lock:
+  fcntl.flock(lock.fileno(),fcntl.LOCK_EX)
+  _reconcile_routes_locked()
+def _reconcile_routes_locked():
  """Publish owned app routes, with original routes retained for explicit rollback."""
- apps=[a for a in android_inventory(required=True) if a.get('retired') is not True and a.get('domain') and (a.get('migrated') or (a.get('ready') and not a.get('nativeRuntime')))]
+ apps=[a for a in android_inventory(required=True) if a.get('retired') is not True and a.get('returnedToCoolify') is not True and a.get('domain') and (a.get('migrated') or (a.get('ready') and not a.get('nativeRuntime')))]
  routers={};services={};middlewares={'brandfleet-redirect':{'redirectScheme':{'scheme':'https','permanent':True}}}
  for a in apps:
   aid=a.get('id',a.get('name',''));domain=a['domain'];ip=a.get('ip','')
@@ -173,7 +189,10 @@ def reconcile_routes():
    services[key]={'loadBalancer':{'servers':[{'url':'http://'+ip+':'+str(epport)}]}}
  ROUTES.parent.mkdir(parents=True,exist_ok=True)
  temp=ROUTES.with_suffix('.tmp')
- temp.write_text(json.dumps({'http':{'routers':routers,'services':services,'middlewares':middlewares}},indent=2)+'\n')
+ http={'middlewares':middlewares}
+ if routers:http['routers']=routers
+ if services:http['services']=services
+ temp.write_text(json.dumps({'http':http},indent=2)+'\n')
  temp.replace(ROUTES)
 # Native services are read through a fixed command; no user input reaches the guest.
 SHARED_PRIVATE=Path('/opt/brandfleet/services/private')
@@ -292,26 +311,70 @@ def shared_services_inventory(docker):
  except (OSError,ValueError):pass
  return services,workspace,infra
 
+def coolify_brand(a,raw):
+ deployment=a.get('coolifyDeployment') or {};uid=deployment.get('resourceUuid','')
+ names=set(deployment.get('containers',[]));primary=deployment.get('primaryContainer','')
+ def matches(d):
+  name=d.get('Name','').lstrip('/');labels=d.get('Config',{}).get('Labels') or {}
+  return name in names or bool(uid and (labels.get('com.docker.compose.project')==uid or name==uid or name.startswith(uid+'-') or name.endswith('-'+uid)))
+ # A redeployment retains stopped predecessors. Count the current container
+ # for each Compose service, while still showing a stopped database role.
+ roles={}
+ for d in raw:
+  if not matches(d):continue
+  role=(d.get('Config',{}).get('Labels')or{}).get('com.docker.compose.service')or 'application'
+  roles.setdefault(role,[]).append(d)
+ def current(candidates):
+  return max(candidates,key=lambda d:(bool(d.get('State',{}).get('Running')),d.get('Name','').lstrip('/')in names,d.get('Created','')))
+ containers=[current(candidates)for candidates in roles.values()];running=[d for d in containers if d.get('State',{}).get('Running')]
+ main=next((d for d in containers if d.get('Name','').lstrip('/')==primary),None)
+ if main is None and running:main=next((d for d in running if (d.get('Config',{}).get('Labels')or{}).get('com.docker.compose.service')==deployment.get('primaryService')),running[0])
+ status='unavailable' if not containers else 'stopped' if not running else 'running'
+ if running and (len(running)!=len(containers) or any(d.get('State',{}).get('Health',{}).get('Status')=='unhealthy' for d in containers)):status='degraded'
+ resources={'memoryBytes':None,'memoryLimitBytes':None,'cpuCores':None};used=[];limits=[];cores=[]
+ for d in containers:
+  host=d.get('HostConfig',{});limits.append(host.get('Memory',0));quota=host.get('NanoCpus',0)/1e9
+  if not quota and host.get('CpuQuota',0)>0:quota=host['CpuQuota']/host.get('CpuPeriod',100000)
+  cores.append(quota)
+  try:
+   pid=int(d['State']['Pid'])
+   if pid:
+    line=next(x for x in Path('/proc/'+str(pid)+'/cgroup').read_text().splitlines()if x.startswith('0::'))
+    used.append(int((Path('/sys/fs/cgroup')/line[3:].lstrip('/')/'memory.current').read_text()))
+  except (OSError,ValueError,KeyError,StopIteration):pass
+ if used:resources['memoryBytes']=sum(used)
+ if limits and all(limits):resources['memoryLimitBytes']=sum(limits)
+ if cores and all(cores):resources['cpuCores']=sum(cores)
+ console=deployment.get('consoleUrl') or 'https://deployments.example.com';domain=a.get('domain','')
+ return {'id':a['id'],'name':a.get('displayName') or domain,'domain':domain,'domains':[domain,*a.get('aliases',[])],'url':'https://'+domain,'status':status,'phase':'coolify-production','description':'Coolify-managed Docker workload on Debian','resources':resources,'website':{'status':status,'runtime':main.get('Config',{}).get('Image','')if main else 'Coolify Docker','containerId':main.get('Id','')[:12]if main else '', 'url':'https://'+domain,'detail':'Current application data is retained in this managed Debian deployment.'},'android':{'status':'unavailable','detail':'Android hosting retired; recovery data retained.'},'automation':{'status':'ready','url':console,'detail':'Open Coolify for deployments, logs, configuration and persistent storage.'},'social':[],'backup':{'status':'retained','detail':'Original runtime and preserved data remain available for recovery.'},'actions':[]}
+
 def inventory():
  raw=json.loads(command(['docker','inspect',*command(['docker','ps','-aq']).split()]))
  services,workspace,shared_host=shared_services_inventory(raw)
  shared_hosts={'mail':'mail.example.com','workspace':'workspace.example.com','freeresend':'email-api.example.com'}
  verified_shared_domains={shared_hosts[s['id']] for s in services if s.get('deployment')=='production' and s.get('id') in shared_hosts}
  android=android_inventory(allow_cached=True)
- package_evidence=social_evidence_inventory()
- migrated_domains={x for a in android if a.get('migrated') for x in [a.get('domain',''),*a.get('aliases',[])]}
- brands=[]
+ returning=coolify_return_state().get('active') is True
+ package_evidence={} if returning else social_evidence_inventory()
+ migrated_domains={x for a in android if a.get('migrated') and a.get('returnedToCoolify') is not True for x in [a.get('domain',''),*a.get('aliases',[])]}
+ returned_domains={x for a in android if a.get('returnedToCoolify') is True for x in [a.get('domain',''),*a.get('aliases',[])]}
+ mapped=[a for a in android if a.get('returnedToCoolify') is True and a.get('retired') is not True and isinstance(a.get('coolifyDeployment'),dict) and a['coolifyDeployment'].get('resourceUuid')]
+ mapped_domains={x for a in mapped for x in [a.get('domain',''),*a.get('aliases',[])]}
+ brands=[coolify_brand(a,raw)for a in mapped]
  for d in raw:
   n=d['Name'].lstrip('/');lab=d.get('Config',{}).get('Labels') or {};rules=' '.join(str(v) for k,v in lab.items() if k.endswith('.rule'))
   domains=re.findall(r'Host\(`([^`]+)`\)',rules)
   if not domains:continue
+  if set(domains).issubset(mapped_domains):continue
   if set(domains).issubset(migrated_domains|verified_shared_domains):continue
+  if set(domains).intersection(returned_domains) and not d['State'].get('Running'):continue
   status='running' if d['State'].get('Running') else 'stopped';health=d['State'].get('Health',{}).get('Status')
   if health=='unhealthy':status='degraded'
   bid='legacy-'+d['Id'][:12]
-  brands.append({'id':bid,'name':domains[0].removeprefix('www.'),'domain':domains[0],'domains':sorted(set(domains)),'url':'https://'+domains[0],'status':status,'phase':'existing-docker','description':n,'website':{'status':status,'runtime':d['Config']['Image'],'containerId':d['Id'][:12],'detail':'Existing production service; migration not yet validated'},'android':{'status':'unavailable','detail':'Android migration pending compatibility validation'},'automation':{'status':'unknown','detail':'Existing job dependencies are being inventoried'},'social':[],'backup':{'status':'unverified','repositoryUrl':'','detail':'Configure and validate your own application backup independently'},'actions':[]})
+  restored=bool(set(domains).intersection(returned_domains))
+  brands.append({'id':bid,'name':domains[0].removeprefix('www.'),'domain':domains[0],'domains':sorted(set(domains)),'url':'https://'+domains[0],'status':status,'phase':'coolify-production' if restored else 'existing-docker','description':n,'website':{'status':status,'runtime':d['Config']['Image'],'containerId':d['Id'][:12],'detail':'Coolify Docker deployment on Debian' if restored else 'Existing production service; migration not yet validated'},'android':{'status':'unavailable','detail':'Android hosting retired; recovery data retained' if restored else 'Android migration pending compatibility validation'},'automation':{'status':'unknown','detail':'Existing job dependencies are being inventoried'},'social':[],'backup':{'status':'unverified','repositoryUrl':'','detail':'Configure and validate your own application backup independently'},'actions':[]})
  for a in android:
-  if not isinstance(a,dict) or a.get('retired') is True:continue
+  if not isinstance(a,dict) or a.get('retired') is True or a.get('returnedToCoolify') is True:continue
   aid=a.get('id') or a.get('name','');s=a.get('state','UNKNOWN').lower();domain=a.get('domain','');ip=a.get('ip') or a.get('privateIp','')
   if not ID_RE.fullmatch(aid):continue
   actions=(['stop','restart','clone','archive','remove'] if s=='running' else ['start','clone','archive','remove']) if ready() and not a.get('_inventoryStale') else []
@@ -320,15 +383,26 @@ def inventory():
  mem={}
  for line in Path('/proc/meminfo').read_text().splitlines():
   k,v=line.split(':',1);mem[k]=int(v.split()[0])*1024
- out={'updatedAt':now(),'source':'Private ingress and Android pool inventory','mode':'isolated-android-fleet','notes':['Each migrated website runs inside its own Android LXC. Remaining services are marked as existing deployments.','Shared mail and workspace run in the measured native Debian services container. Google Workspace domains retain their Google mail.','New domains require a DNS A record to ingress. A shared IP does not isolate sender reputation.'],'infrastructure':[{'id':'website-ingress','name':'Website ingress and services ingress','type':'Debian KVM VM','address':'192.0.2.10','status':'running','detail':'Live inventory; shared physical Proxmox failure remains possible','resources':{'cpuCores':os.cpu_count(),'memoryBytes':mem['MemTotal']-mem.get('MemAvailable',mem.get('MemFree',0)),'memoryLimitBytes':mem['MemTotal']}}], 'brands':brands,'services':[], 'capabilities':{'create':ready(),'profiles':[{'id':'android-static','name':'Android 14 + website · 2 GB / 1 CPU'}] if ready() else []}}
+ out={'updatedAt':now(),'source':'Private ingress and Android pool inventory','mode':'isolated-android-fleet','notes':['Each migrated website runs inside its own Android LXC. Remaining services are marked as existing deployments.','Shared mail and workspace run in the measured native Debian services container. Google Workspace domains retain their Google mail.','New domains require a DNS A record to .187. A shared IP does not isolate sender reputation.'],'infrastructure':[{'id':'website-ingress','name':'Website ingress and services .187','type':'Debian KVM VM','address':'192.0.2.10','status':'running','detail':'Live inventory; shared physical Proxmox failure remains possible','resources':{'cpuCores':os.cpu_count(),'memoryBytes':mem['MemTotal']-mem.get('MemAvailable',mem.get('MemFree',0)),'memoryLimitBytes':mem['MemTotal']}}], 'brands':brands,'services':[], 'capabilities':{'create':ready(),'profiles':[{'id':'android-static','name':'Android 14 + website · 2 GB / 1 CPU'}] if ready() else []}}
  out['services'],out['workspace']=services,workspace
  out['infrastructure'].append(shared_host)
+ if returning:
+  out['source']='Live Coolify/Debian containers and retained shared services'
+  out['mode']='coolify-debian-return'
+  out['notes']=['Websites are returning to Coolify Docker workloads on Debian .187. Android lifecycle and creation are disabled.','Shared mail, workspace and application backends remain in bf-services on Debian. Google Workspace mail routing is retained.']
+  out['capabilities']={'create':False,'profiles':[]}
+  out['services'].insert(0,{'id':'coolify','name':'Coolify deployment console','type':'Coolify on Debian · Docker · Traefik','status':'running' if any(d.get('Name','').lstrip('/')=='coolify' and d.get('State',{}).get('Running') for d in raw) else 'unknown','url':'https://deployments.example.com','detail':'Manage application deployments, logs, environment and persistent storage in Coolify.'})
+  return_phase=coolify_return_state().get('phase')
+  if return_phase in ('accepted-awaiting-pool-shutdown','complete'):
+   pool_note='The coupled Android pool is stopped with its data retained.' if return_phase=='complete' else 'Android pool shutdown is pending; recovery data will be retained.'
+   out['notes'][0]='Production websites run in Coolify Docker workloads on Debian .187. '+pool_note
+   return out
  try:
   pool=pool_status()
   budget=int(pool.get('assignedBudgetMiB',24576));limit=int(pool.get('maxInstances',12))
   active_android=[a for a in android if a.get('retired') is not True]
   assigned=sum(int(a.get('memoryMiB',4096)) for a in active_android)
-  out['infrastructure'].append({'id':'android-pool','name':'Android pool VM','type':'Debian KVM with Android LXC','address':'10.77.1.104','status':'running','detail':f'Private pool behind ingress; {budget/1024:g} GiB assigned memory budget, {limit} unit limit; measured memory reserve required','resources':{'cpuCores':pool['cpuCount'],'memoryBytes':pool['memoryTotalBytes']-pool['memoryAvailableBytes'],'memoryLimitBytes':pool['memoryTotalBytes']}})
+  out['infrastructure'].append({'id':'android-pool','name':'Android pool pool VM','type':'Debian KVM with Android LXC','address':'10.77.1.104','status':'running','detail':f'Private pool behind .187; {budget/1024:g} GiB assigned memory budget, {limit} unit limit; measured memory reserve required','resources':{'cpuCores':pool['cpuCount'],'memoryBytes':pool['memoryTotalBytes']-pool['memoryAvailableBytes'],'memoryLimitBytes':pool['memoryTotalBytes']}})
   if len(active_android)>=limit or assigned+2048>budget or int(pool['memoryAvailableBytes'])<5*1024**3:
    out['capabilities']['create']=False
    out['notes'].append('Creation is paused while the pool has insufficient reserved memory. Existing environments remain independently manageable.')

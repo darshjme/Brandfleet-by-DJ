@@ -158,3 +158,19 @@ test('viewer login return stays same-origin and serves dock/module under CSP', a
   const core = await fetch(`${base}/android-viewer-core.js`); assert.equal(core.status, 200); assert.match(core.headers.get('content-type'), /javascript/); assert.match(core.headers.get('content-security-policy'), /script-src 'self'/);
   const shell = await (await fetch(base)).text(); assert.match(shell, /type="module" src="\/app.js"/);
 });
+
+
+test('nullable optional inventory fields remain unknown while retaining brand rows', () => {
+  const output = normalizeInventory({
+    brands: [{ id: 'pilot1', resources: null, website: null, android: null, automation: null, packageEvidence: null, jobs: [null] }],
+    workspace: null,
+  });
+  assert.equal(output.brands[0].id, 'pilot1');
+  assert.equal(output.brands[0].resources.memoryBytes, null);
+  assert.equal(output.brands[0].website.status, 'unknown');
+  assert.equal(output.brands[0].android.status, 'unknown');
+  assert.equal(output.brands[0].automation.status, 'unknown');
+  assert.equal(output.brands[0].packageEvidence.evidencePresent, false);
+  assert.equal(output.brands[0].jobs[0].id, '');
+  assert.equal(output.workspace.status, 'unknown');
+});

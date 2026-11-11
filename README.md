@@ -8,9 +8,9 @@ A browser control room for websites, deployment health, mail and shared workspac
 
 Production websites use **Coolify on Debian** with Docker application containers or Compose stacks. Traefik routes each domain to its application; persistent databases, files and scheduled jobs have separate recovery paths. A shared Debian LXC supplies mail, collaboration and common backends. BrandFleet brings their status and management links together.
 
-**Deployment status — 7 October 2026:** all 14 production brands are running on Coolify with current data. After the Android pool stopped, checks passed for all 37 website domains/aliases at the origin and 43 public URLs, including six shared management/service pages, with TLS validation enabled. The stopped Android VM has autostart disabled and its recovery disks retained.
+**Historical deployment snapshot — 7 October 2026:** all 14 production brands were running on Coolify with current data at that check. This repository is a reference implementation, not a live status page. After the Android pool stopped, checks passed for all 37 website domains/aliases at the origin and 43 public URLs, including six shared management/service pages, with TLS validation enabled. At that snapshot, the stopped Android VM had autostart disabled and its recovery disks retained.
 
-[Explore the architecture](docs/architecture.md) · [Run a local preview](docs/local-preview.md) · [Read the operating model](docs/operations.md) · [Android experiment](docs/android-experiment.md) · [Upstream projects](THIRD_PARTY.md)
+[Try the preview](docs/local-preview.md) · [Contribute](CONTRIBUTING.md) · [Explore the architecture](docs/architecture.md) · [Read the operating model](docs/operations.md) · [Android experiment](docs/android-experiment.md) · [Upstream projects](THIRD_PARTY.md)
 
 ## The control room
 
@@ -102,6 +102,17 @@ Follow the [local preview guide](docs/local-preview.md) to create a local passwo
 
 This is a configurable reference, not a universal installer or a copy of every hosted website. Private migrations, runtime inventories, app code, APKs, signed-in Android sessions, databases and credentials are excluded. Host integration and restore paths require operator configuration. Tests run locally; no GitHub Actions workflow is provided.
 
+## Develop and verify
+
+Start with the dashboard and controller suites. Tests use temporary state and mocked host commands; they do not deploy services or certify live infrastructure.
+
+```sh
+node --test brandfleet-dashboard/test/*.test.mjs
+python3 -m unittest discover -s brandfleet-controller -p 'test_controller.py' -v
+```
+
+The [contribution guide](CONTRIBUTING.md) maps the remaining tests and explains configuration boundaries. Keep operational changes separate from source changes, and validate restore procedures against your own deployment.
+
 ## The Android experiment
 
 The earlier design coupled each website's native Debian userspace to an Android LXC. Fifteen devices passed website origin acceptance on **6 October 2026**. That model had a substantial base resource cost and unresolved social-app compatibility, so production website hosting returned to conventional containers.
@@ -123,6 +134,6 @@ Production stayed on Android 14. The Android 16 canary failed bootstrap and was 
 - Configure mail domains explicitly. Website DNS alone does not create email; domains already using Google Workspace retain their mail routing.
 - Keep private controllers, mailbox issuer material and ADB behind authenticated boundaries.
 
-Built and maintained by **Darshankumar Joshi** · [darshjme](https://github.com/darshjme)
+Built and maintained by **Darshankumar Joshi** · [Project directory](https://github.com/darshjme) · [DJcode](https://github.com/darshjme/djcode) for local coding workflows
 
 Third-party platforms, software and app names retain their respective ownership and licensing. See [THIRD_PARTY.md](THIRD_PARTY.md).

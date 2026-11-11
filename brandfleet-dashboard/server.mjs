@@ -21,6 +21,8 @@ const states = new Set(['running', 'stopped', 'pending', 'error', 'ready', 'unav
 const string = (v, max = 300) => typeof v === 'string' ? v.slice(0, max) : '';
 const number = v => typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null;
 const state = v => states.has(v) ? v : 'unknown';
+// Optional observations may be explicitly null when a service is unavailable.
+const record = v => v && typeof v === 'object' && !Array.isArray(v) ? v : {};
 export function safeUrl(value) {
   if (typeof value !== 'string' || value.length > 2000) return '';
   try { const u = new URL(value); return ['http:', 'https:'].includes(u.protocol) && !u.username && !u.password ? u.href : ''; } catch { return ''; }
@@ -35,14 +37,17 @@ function verifyPassword(password, encoded) {
   return timingSafeEqual(scryptSync(password, parts[1], 64), Buffer.from(parts[2], 'hex'));
 }
 function resource(v = {}) {
+  v = record(v);
   return { cpuPercent: number(v.cpuPercent), cpuCores: number(v.cpuCores), memoryBytes: number(v.memoryBytes), memoryLimitBytes: number(v.memoryLimitBytes), diskBytes: number(v.diskBytes), diskLimitBytes: number(v.diskLimitBytes) };
 }
 function component(v = {}) {
+  v = record(v);
   return { status: state(v.status), detail: string(v.detail), url: safeUrl(v.url), screenUrl: safeUrl(v.screenUrl), terminalUrl: safeUrl(v.terminalUrl), runtime: string(v.runtime, 80), containerId: string(v.containerId, 80), privateIp: string(v.privateIp, 80), lastCheckedAt: string(v.lastCheckedAt, 80) };
 }
 const workspaceApps = { files: '/apps/files/', spreed: '/apps/spreed/', calendar: '/apps/calendar/', contacts: '/apps/contacts/', deck: '/apps/deck/', webmail: '/' };
 const deployment = v => ['production', 'preview', 'private'].includes(v) ? v : 'unknown';
 export function normalizeWorkspace(raw = {}) {
+  raw = record(raw);
   return { status: state(raw.status), measuredAt: string(raw.measuredAt, 80), deployment: deployment(raw.deployment), url: safeUrl(raw.url), previewUrl: safeUrl(raw.previewUrl), version: string(raw.version, 80),
     apps: Array.isArray(raw.apps) ? raw.apps.slice(0, 20).filter(a => Object.hasOwn(workspaceApps, a.id) && a.path === workspaceApps[a.id]).map(a => ({ id: a.id, name: string(a.name, 80), path: workspaceApps[a.id], status: state(a.status), version: string(a.version, 80), url: safeUrl(a.url), detail: string(a.detail, 400) })) : [],
     tenantIsolation: { status: raw.tenantIsolation?.status === 'verified' ? 'verified' : 'unknown', verifiedAt: string(raw.tenantIsolation?.verifiedAt, 80), detail: string(raw.tenantIsolation?.detail, 400) },
@@ -51,6 +56,7 @@ export function normalizeWorkspace(raw = {}) {
 }
 const socialPackages = new Set(['com.figma.mirror', 'com.whatsapp', 'com.twitter.android', 'com.linkedin.android', 'com.tailscale.ipn', 'com.instagram.android']);
 export function normalizePackageEvidence(raw = {}) {
+  raw = record(raw);
   const stamp = typeof raw.lastVerified === 'string' ? Date.parse(raw.lastVerified) : NaN;
   const lastVerified = Number.isFinite(stamp) && stamp <= Date.now() + 300000 ? string(raw.lastVerified, 80) : '';
   const seen = new Set();
@@ -77,6 +83,7 @@ export function normalizeInventory(raw = {}) {
   };
 }
 function normalizeJob(j = {}) {
+  j = record(j);
   return { id: string(j.id, 100), brandId: string(j.brandId, 80), action: string(j.action, 80), status: string(j.status, 60), createdAt: string(j.createdAt, 80), updatedAt: string(j.updatedAt, 80), message: string(j.message, 600) };
 }
 export function normalizeMail(raw = {}) {

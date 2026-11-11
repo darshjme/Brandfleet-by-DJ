@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/brandfleet-hero.svg" alt="BrandFleet by DJ — a control room for Coolify websites and shared Debian services" width="100%">
+  <img src="docs/assets/brandfleet-hero.svg" alt="BrandFleet by DJ — a cyberpunk control room for Coolify websites, workspace and mail" width="100%">
 </p>
 
 # BrandFleet by DJ
